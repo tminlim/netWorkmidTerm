@@ -12,8 +12,16 @@
 
 #define BUF_SIZE 100
 #define EPOLL_SIZE 30
+#define FDLIST_SIZE 10
+
+struct fdList {
+	int fd[FDLIST_SIZE];
+};
 
 void error_handling(char *buf);
+void addFdList(struct fdList * list, int fd);
+void removeFdList(struct fdList * list, int fd);
+void broadcast(struct fdList * list, int fd, char *buf, int length);
 
 int main (int argc, char* argv[]) {
 	int serverSocket, clientSocket;
@@ -22,13 +30,16 @@ int main (int argc, char* argv[]) {
 
 	struct epoll_event *epollEvents;
 	struct epoll_event event;
-	int epoolFd, eventCount, byteLength;
+	int epoolFd, eventCount, byteLength, wSize;
 	char buf[BUF_SIZE];
+	struct fdList list;
 
 	if(argc != 2) {
 		printf("usage : %s <port>\n", argv[0]);
 		exit(1);
 	}
+
+	memset(&list, 0, sizeof(list));
 
 	//open socket
 	serverSocket = socket(PF_INET, SOCK_STREAM, 0);
@@ -72,8 +83,12 @@ int main (int argc, char* argv[]) {
 				event.events = EPOLLIN;
 				event.data.fd = clientSocket;
 				epoll_ctl(epoolFd, EPOLL_CTL_ADD, clientSocket, &event);
+				addFdList(&list, clientSocket);
 				printf("connect client %d\n", clientSocket);
-			} else {
+			} else if (epollEvents[i].data.fd == 0) {
+	                fgets(buf, BUF_SIZE, stdin);
+				 broadcast(&list, 0, buf, strlen(buf));
+              } else {
 				byteLength = read(epollEvents[i].data.fd, buf, BUF_SIZE - 1);
 				if(byteLength == 0) {
 					epoll_ctl(epoolFd, EPOLL_CTL_DEL, epollEvents[i].data.fd, NULL);
@@ -82,7 +97,8 @@ int main (int argc, char* argv[]) {
 				} else {
 					buf[byteLength] = '\0'; //convert string
 					printf("%s\n",buf);
-					write(epollEvents[i].data.fd, buf, byteLength);
+					//write(epollEvents[i].data.fd, buf, byteLength);
+					broadcast(&list, epollEvents[i].data.fd, buf, byteLength);
 				}
 			}
 		}
@@ -92,6 +108,38 @@ int main (int argc, char* argv[]) {
 	close(serverSocket);
 	close(epoolFd);
 	return 0;
+}
+
+void addFdList(struct fdList * list, int fd) {
+	for (int idx = 0; idx < FDLIST_SIZE; idx++) {
+		if(list->fd[idx] == 0) {
+			list->fd[idx] = fd;
+			break;
+		} 
+	}
+}
+
+void removeFdList(struct fdList * list, int fd) {
+	for (int idx = 0; idx < FDLIST_SIZE; idx++) {
+		if(list->fd[idx] == fd) {
+			list->fd[idx] = 0;
+		}
+	}
+}
+
+void broadcast(struct fdList * list, int fd, char *buf, int length) {
+	for(int idx = 0; idx < FDLIST_SIZE; idx++) {
+		if(list->fd[idx] == fd)
+			continue;
+
+		if(list->fd[idx] == 0)
+			continue;
+
+		if (send(list->fd[idx], buf, length, 0) <= 0) {
+	          perror("send");
+	          //fprintf(stderr, "error: %s", "send");
+	     }
+	}
 }
 
 void error_handling(char *buf) {
