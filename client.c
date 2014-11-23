@@ -1,11 +1,8 @@
-//
-// client.c
-// simple_client
-//
-// Created by Injae Lee on 2014. 10. 10.
-// Modified by Minsuk Lee,
+//this client code, refer to below code
+
+// Created by Injae Lee on 2014. 10. 10. Modified by Minsuk Lee,
 // Copyright (c) 2014. Injae Lee All rights reserved.
-// see LICENSE
+
 
 #include <stdio.h>
 #include <stdlib.h>
